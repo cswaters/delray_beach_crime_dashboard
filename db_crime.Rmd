@@ -1,0 +1,110 @@
+---
+title: "Crime Prediction"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: spacelab
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(leaflet)
+library(leaflet.extras)
+df <- read_csv('processed_data/db_crime_data_by_dow.csv')
+
+get_crime_est <- function(day,season,tod){
+  df %>% 
+    filter(
+      day_week == day,
+      season == season,
+      day_segment == tod
+    ) %>% 
+    na.omit()
+}
+
+day_vals <- c('Mon','Tue','Wed','Thu','Fri','Sat','Sun')
+# month_vals <- c('Jan','Feb','Mar','Apr',
+#                 'May','Jun','Jul','Aug',
+#                 'Sep','Oct','Nov','Dec')
+season_vals <- c('Spring','Summer','Fall','Winter')
+tod_vals <- unique(df$day_segment)
+```
+
+Inputs {.sidebar}
+-------------------------------------
+
+```{r}
+
+selectInput('day_id',
+            'Select Day',
+            choices = day_vals,
+            selected = day_vals[1])
+
+selectInput('season_id',
+            'Select time of year',
+            choices = season_vals,
+            selected = season_vals[1])
+
+
+selectInput('tod_id', 
+            'Select time of day',
+            choices = tod_vals,
+            selected = tod_vals[2])
+```
+
+
+```{r}
+dataset <- reactive({
+  get_crime_est(
+    day = input$day_id,
+    season = input$season_id,
+    tod = input$tod_id
+  )
+})
+```
+
+
+
+Column 
+-----------------------------------------------------------------------
+
+### Delray Beach Crime Prediction
+
+```{r}
+renderLeaflet({
+  other_crime <- filter(dataset(), crime_cat == 'Other')
+  theft_crime <- filter(dataset(), crime_cat == 'Theft')
+  impaired_crime <- filter(dataset(), crime_cat == 'Impaired')
+  violence_crime <- filter(dataset(), crime_cat == 'Violence')
+  property_crime <- filter(dataset(), crime_cat == 'Property')
+  
+  
+  leaflet() %>% 
+  #addProviderTiles(providers$CartoDB.Positron) %>% 
+  addProviderTiles(providers$Stamen.Toner) %>% 
+  addHeatmap(lng=~longitude,lat=~latitude,intensity = ~n/25,
+             data = theft_crime,group = 'theft') %>%
+  addHeatmap(lng=~longitude,lat=~latitude,intensity = ~n/25,
+             data = property_crime, group = 'property') %>%
+  addHeatmap(lng=~longitude,lat=~latitude,intensity = ~n/25,
+             data = violence_crime, group = 'violence') %>%
+  addHeatmap(lng=~longitude,lat=~latitude,intensity = ~n/25,
+             data = impaired_crime, group = 'impaired') %>% 
+  addHeatmap(lng=~longitude,lat=~latitude,intensity = ~n/250,
+             data = other_crime, group = 'other') %>% 
+
+  addLayersControl(
+    overlayGroups = c("theft", 
+                      "property",
+                      "violence",
+                      "impaired",
+                      "other"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>% 
+  hideGroup("other") %>% 
+  hideGroup("impaired")
+})
+```
+
